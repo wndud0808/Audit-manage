@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>서류점검항목</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: header + meter; two columns: left = 분류 12개 (sticky), right = 서류 목록 with 비고·링크. Bottom: fixed sheet-style tab bar. Data lives in Firebase RTDB, synced live across everyone signed in. */
+:root{
+  --bg:#f5f6f4; --panel:#ffffff; --fg:#1d2420; --muted:#66706a; --line:#dfe3df;
+  --accent:#2f5d50; --accent-soft:#e3ece8;
+  --ok:#2e7d4f; --ok-soft:#e2f2e8; --warn:#b4610b; --warn-soft:#fbeedd; --na:#7b837e; --na-soft:#eceeec;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141816; --panel:#1c211f; --fg:#e4e9e6; --muted:#98a39d; --line:#2e3532;
+  --accent:#8cc4b1; --accent-soft:#23332d;
+  --ok:#6fcf97; --ok-soft:#1d3226; --warn:#f0a95a; --warn-soft:#3a2a17; --na:#a2aaa5; --na-soft:#262c29; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:24px 120px}
+h1{font-size:1.5rem;font-weight:700;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1 .tn{color:var(--accent);font-weight:600}
+.sub{color:var(--muted);margin:.2rem 0 0;font-size:.88rem}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.save{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.save .st{display:flex;align-items:center;gap:6px}
+.save i{width:8px;height:8px;border-radius:50%;background:var(--na);display:inline-block}
+.save.on i{background:var(--ok)} .save.off i{background:var(--warn)}
+.who{font-size:.78rem;color:var(--muted)}
+.signout{border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;padding:3px 9px;font:inherit;font-size:.76rem;cursor:pointer}
+.signout:hover{border-color:var(--muted);color:var(--fg)}
+.sum{margin-top:14px;display:grid;gap:8px}
+.meter{height:10px;border-radius:5px;background:var(--line);overflow:hidden;display:flex}
+.meter span{display:block;height:100%}
+.m-ok{background:var(--ok)} .m-na{background:var(--na)} .m-warn{background:var(--warn)}
+.stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--muted);align-items:baseline}
+.stats b{font-family:var(--f-mono);font-weight:500;color:var(--fg);font-variant-numeric:tabular-nums}
+.stats .pct{font-size:1.3rem;font-family:var(--f-mono);color:var(--accent);margin-right:4px}
+.cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;margin-top:18px;align-items:start}
+.main{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.mh{padding:14px 16px 12px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
+.mh-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px}
+.mh h2{margin:0;font-size:1.15rem;font-weight:700}
+.mh .cnt{font-family:var(--f-mono);font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:none;padding:5px 10px;font:inherit;font-size:.8rem;color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+input[type=search],input[type=text]{min-width:0;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);padding:5px 10px;font:inherit;font-size:.85rem}
+input[type=search]{flex:1 1 160px}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:11px 16px 11px 13px;border-left:3px solid transparent}
+li+li{border-top:1px solid var(--line)}
+li .nm{min-width:0;flex:1 1 220px}
+li .nm small{display:block;color:var(--muted);font-size:.75rem}
+li[data-s="done"]{border-left-color:var(--ok)} li[data-s="done"] .nm{color:var(--muted)}
+li[data-s="fix"]{border-left-color:var(--warn);background:var(--warn-soft)}
+li[data-s="na"]{border-left-color:var(--na)} li[data-s="na"] .nt{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.nm .nt{margin-right:8px}
+.ptog{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:10px;padding:0 8px;font:inherit;font-size:.72rem;line-height:1.6;cursor:pointer;vertical-align:1px}
+.ptog:hover{border-color:var(--muted);color:var(--fg)}
+.ptog[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+.st{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.st .pn{font-family:var(--f-mono);font-size:.72rem}
+.proc{display:inline-flex;flex-wrap:wrap;gap:3px;padding:2px;border:1px dashed var(--accent);border-radius:8px}
+.st .proc button{padding:2px 8px;font-size:.76rem}
+.st .proc button[aria-pressed="true"]{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);font-weight:600}
+.st .proc button[aria-pressed="true"]::before{content:"✓ "}
+.st button{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:6px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+.st button:hover{border-color:var(--muted)}
+.st button[data-v="done"][aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:var(--panel);font-weight:600}
+.st button[data-v="fix"][aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--panel);font-weight:600}
+.st button[data-v="na"][aria-pressed="true"]{background:var(--na);border-color:var(--na);color:var(--panel);font-weight:600}
+.memos{flex:1 1 100%;display:grid;gap:4px;min-width:0}
+.memo{display:flex;align-items:center;gap:6px;min-width:0}
+.memo label,.memo .sp{font-size:.75rem;color:var(--muted);flex:none;width:2.2em}
+.memo input{flex:1;width:100%;padding:4px 8px;font-size:.84rem;background:var(--bg)}
+.memo input:not(:placeholder-shown){background:var(--panel);border-color:var(--muted)}
+.mdel{flex:none;width:26px;height:26px;border:1px solid transparent;background:none;color:var(--muted);border-radius:6px;font:inherit;font-size:1rem;line-height:1;cursor:pointer}
+.mdel:hover{border-color:var(--line);color:var(--warn)}
+.madd{justify-self:start;margin-left:calc(2.2em + 6px);border:1px dashed var(--line);background:none;color:var(--muted);border-radius:6px;padding:2px 10px;font:inherit;font-size:.76rem;cursor:pointer}
+.madd:hover{border-color:var(--muted);color:var(--fg)}
+.memo.link input{font-family:var(--f-mono);font-size:.78rem}
+.mini{flex:none;border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;padding:1px 8px;font:inherit;font-size:.72rem;cursor:pointer}
+.mini:hover{border-color:var(--muted);color:var(--fg)}
+.empty{padding:22px 16px;color:var(--muted);font-size:.88rem}
+.mf{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
+.nav{border:1px solid var(--line);background:none;color:var(--fg);border-radius:6px;padding:5px 10px;font:inherit;font-size:.82rem;cursor:pointer}
+.nav:hover{border-color:var(--muted)}
+.nav[disabled]{visibility:hidden}
+.side{order:-1;position:sticky;top:12px;display:grid;gap:6px;min-width:0}
+.side h3{margin:0 0 2px;font-size:.75rem;font-weight:600;color:var(--muted);letter-spacing:.06em}
+.cat{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:center;width:100%;text-align:left;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);font:inherit;cursor:pointer}
+.cat:hover{border-color:var(--muted)}
+.cat[aria-current="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.cat .cn{font-size:.9rem;font-weight:600;min-width:0}
+.cat .cc{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:6px;align-items:center}
+.cat .meter{grid-column:1/-1;height:4px}
+.flag{color:var(--warn);background:var(--warn-soft);border-radius:10px;padding:0 6px;font-family:var(--f-body);font-size:.7rem;font-weight:600}
+.fin{color:var(--ok);background:var(--ok-soft);border-radius:10px;padding:0 6px;font-family:var(--f-body);font-size:.7rem;font-weight:600}
+.foot{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+.btn{border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;padding:5px 10px;font:inherit;font-size:.8rem;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted);color:var(--fg)}
+.btn.arm{border-color:var(--warn);color:var(--warn);font-weight:600}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--panel);border-top:1px solid var(--line);padding:8px 16px calc(8px + env(safe-area-inset-bottom,0px))}
+.tabrow{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:6px;overflow-x:auto}
+.tab{flex:none;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:6px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer;white-space:nowrap}
+.tab:hover{color:var(--fg);border-color:var(--muted)}
+.tab[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+.tab small{font-family:var(--f-mono);font-size:.72rem;opacity:.8}
+.tabform{flex:none;display:flex;gap:6px;align-items:center}
+.tabform input{width:180px}
+.tabmsg{flex:none;font-size:.78rem;color:var(--warn)}
+.tabact{margin-left:auto;flex:none;display:flex;gap:6px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+body.ro .st button,body.ro .ptog,body.ro .memo input,body.ro .mdel,body.ro .madd,body.ro .mini,body.ro .reset,body.ro .tabedit{pointer-events:none;opacity:.6}
+@media (max-width:760px){
+  .cols{grid-template-columns:1fr}
+  .side{position:static;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .side h3{grid-column:1/-1}
+  .cat{padding:8px 10px}
+  .cat .cn{font-size:.82rem}
+  .tabact{margin-left:0}
+}
+/* auth screens */
+.gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:32px 28px;max-width:360px;width:100%;text-align:center;display:grid;gap:14px}
+.card h1{font-size:1.2rem}
+.card p{color:var(--muted);font-size:.88rem;margin:0}
+.gbtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;padding:10px 18px;font:inherit;font-size:.92rem;font-weight:600;cursor:pointer}
+.gbtn:hover{border-color:var(--muted)}
+.gbtn svg{width:18px;height:18px}
+.denied{color:var(--warn);font-size:.85rem}
+.spin{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div id="gate" class="gate" hidden></div>
+<div id="root"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+<script>
+(function(){
+"use strict";
+/* ---------- Firebase ---------- */
+var firebaseConfig = {
+  apiKey: "AIzaSyBG88OnXxL9mNlmf2o7LUDFuHzHslQfkDU",
+  authDomain: "audit-manage.firebaseapp.com",
+  databaseURL: "https://audit-manage-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "audit-manage",
+  storageBucket: "audit-manage.firebasestorage.app",
+  messagingSenderId: "487906093656",
+  appId: "1:487906093656:web:7975f769116a791d8f382d"
+};
+var ALLOWED_EMAILS = ["wndud0808@gmail.com","zuglring@gmail.com"];
+firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+var db = firebase.database();
+
+/* ---------- Checklist definition ---------- */
+var GROUPS=[
+ {n:"인허가·법규·회사 일반",i:["영업인허가 서류","사업자 등록증","인허가 서류","품목제조보고서","가설건축물 신고 사항","PL보험","품질 인증서","조직도","생산실적보고","법규 모니터링 관리 기준","법 개정 이력관리","보안관리"]},
+ {n:"HACCP·CCP",i:["HACCP Plan","위해요소분석","공정흐름도(CCP한계기준 표기)","CCP 모니터링 기준","CCP 모니터링 일지","한계기준설정근거자료","유효성평가"]},
+ {n:"공정·생산·제품",i:["작업표준서 (공정/품목)","공정점검기준","공정점검일지","허용오차 기준","생산작업일지","제품설명서(규격서)","표시사항 한도견본","출고검사기준/일지","원료수불부","제품거래기록","선입선출 관리 기준"]},
+ {n:"이물 관리·선별",i:["이물 관리 기준","이물선별기기 모니터링 일지","선별 공정 작업표준서","선별 관련 기준/일지","이물 클레임 처리 기록","사용불가도구리스트","도구류 관리 기준/기록"]},
+ {n:"원부재료·입고·알러지",i:["입고검사기준/일지","입고검사(미생물 등)","원부재료 규격서","시험검사성적서(원/부/포)","원산지 증빙 서류","수입신고필증 등 수입원부재료 서류","GMO/방사선조사식품 관리 리스트","알러지 유발물질 관리기준","알러지 유발물질 관리 리스트"]},
+ {n:"협력사 관리",i:["협력사 관리 기준","협력사 점검 및 부적합 사항 개선 조치","협력사 영업인허가 서류"]},
+ {n:"검사·계측",i:["검사관리기준","검사성적서 (자체/외부기관)","자가품질검사성적서","수질검사 성적서","표면 오염도 검사","낙하균 관리기준/기록","계측기 관리 대장","검교정 기록/일지"]},
+ {n:"위생·세척·소독",i:["영업장 위생 관리 기준","위생관리 일지","세척/소독 기준","세척/소독제 농도 기준 및 검증 일지","청소도구 관리 기준","청소 전/후 유효성 평가 자료","물탱크/저수조 세척/소독 기록","MSDS 서류"]},
+ {n:"방충방서·폐기물",i:["방충방서 관리 기준 및 일지 (개선조치 내역 포함)","방역업체 계약서","방역 서비스 보고서","폐기물 관리기준","폐기물 처리업체 계약서"]},
+ {n:"시설·설비·환경",i:["공장 평면도","시설 배치도","급배기도","설비점검기준/일지","공조설비 청소/교체 기준 및 일지","조도관리기준/기록","온습도 관리일지","온습도 관리기준/일지 (냉장/냉동창고)","차량 관리일지 (온도/청결)","외부인 출입관리 일지"]},
+ {n:"개인위생·교육",i:["위생복 착용 기준","개인위생수칙","개인위생관리기준","건강진단결과서, 보건증","연간교육훈련계획서","작업자 교육일지"]},
+ {n:"부적합·회수·클레임",i:["부적합품 관리 일지","부적합품 처리기준","회수/리콜 기준/절차서","모의회수 실시자료","추적성 관리","클레임처리기준 및 기록"]}
+];
+var ALL=[];GROUPS.forEach(function(g){ALL=ALL.concat(g.i)});
+var IK={};ALL.forEach(function(n,i){IK[n]="i"+i});
+function K(n){return IK[n]}
+var LBL={done:"완료",fix:"보완",na:"해당없음"};
+var PROCS=["당류","식초","홍초","향신료/프리믹스"];
+
+/* ---------- State ---------- */
+var S=null;               // {tabId: {name, order, s:{}, m:{}, p:{}, l:{}}}
+var seeded=false;
+var ui=(function(){try{return JSON.parse(localStorage.getItem("cl26-ui4"))||{}}catch(e){return{}}})();
+ui.f=ui.f||"all"; ui.g=ui.g||0; if(!(ui.g>=0&&ui.g<GROUPS.length))ui.g=0;
+function saveUi(){try{localStorage.setItem("cl26-ui4",JSON.stringify(ui))}catch(e){}}
+var q="", armed=null, tabForm=null, tabMsg="", online=null, meEmail="";
+var dirty={}, flushTimer=null;
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function tabList(){var ids=Object.keys(S||{});ids.sort(function(a,b){return (S[a].order||0)-(S[b].order||0)});return ids}
+function cur(){var ids=tabList();if(!ids.length)return null;if(!ids.includes(ui.t))ui.t=ids[0];return S[ui.t]}
+function counts(T,items){var c={done:0,fix:0,na:0,none:0};items.forEach(function(n){c[(T.s&&T.s[K(n)])||"none"]++});c.t=items.length;return c}
+function meter(c){var t=c.t||1;return '<div class="meter"><span class="m-ok" style="width:'+(c.done/t*100)+'%"></span><span class="m-na" style="width:'+(c.na/t*100)+'%"></span><span class="m-warn" style="width:'+(c.fix/t*100)+'%"></span></div>'}
+function pctOf(T){var c=counts(T,ALL);return Math.round((c.done+c.na)/c.t*100)}
+
+/* ---------- Firebase writes ---------- */
+function immediate(path,val){db.ref(path).set(val).catch(function(e){console.error(e)})}
+function markDirty(path,val){dirty[path]=val;clearTimeout(flushTimer);flushTimer=setTimeout(flushDirty,700)}
+function flushDirty(){var u=dirty;dirty={};clearTimeout(flushTimer);if(Object.keys(u).length)db.ref().update(u).catch(function(e){console.error(e)})}
+window.addEventListener("beforeunload",flushDirty);
+window.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")flushDirty()});
+
+function setStatus(tabId,n,v){var T=S[tabId];T.s=T.s||{};var cur=T.s[K(n)];var nv=cur===v?null:v;
+ if(nv===null)delete T.s[K(n)];else T.s[K(n)]=nv;
+ var P=T.p&&T.p[K(n)];
+ if(P&&P.on){if(nv==="done"){P.c=PROCS.slice()}else{P.c=[]}}
+ render();
+ immediate("tabs/"+tabId+"/s/"+K(n),nv);
+ if(P)immediate("tabs/"+tabId+"/p/"+K(n)+"/c",P.c&&P.c.length?P.c:null);
+}
+function toggleProcOn(tabId,n){var T=S[tabId];T.p=T.p||{};var P=T.p[K(n)]||{on:false,c:[]};P.on=!P.on;
+ if(P.on&&T.s[K(n)]==="done")P.c=PROCS.slice();
+ if(P.on||P.c.length)T.p[K(n)]=P;else delete T.p[K(n)];
+ render();
+ immediate("tabs/"+tabId+"/p/"+K(n),(P.on||P.c.length)?P:null);
+}
+function toggleProcItem(tabId,n,proc){var T=S[tabId];T.p=T.p||{};var P=T.p[K(n)]||{on:true,c:[]};var idx=P.c.indexOf(proc);
+ if(idx>=0)P.c.splice(idx,1);else P.c.push(proc);
+ T.p[K(n)]=P;
+ if(P.c.length===PROCS.length)T.s[K(n)]="done";else if(T.s[K(n)]==="done")delete T.s[K(n)];
+ render();
+ immediate("tabs/"+tabId+"/p/"+K(n),P);
+ immediate("tabs/"+tabId+"/s/"+K(n),T.s[K(n)]||null);
+}
+function memoFocused(){var a=document.activeElement;return a&&a.dataset&&(a.dataset.memo!==undefined||a.dataset.link!==undefined)}
+function setLines(tabId,kind,n,arr,debounce){var T=S[tabId];T[kind]=T[kind]||{};
+ if(arr.length)T[kind][K(n)]=arr;else delete T[kind][K(n)];
+ var clean=arr.filter(function(x){return x.trim()});
+ var path="tabs/"+tabId+"/"+kind+"/"+K(n);
+ if(debounce)markDirty(path,clean.length?clean:null);else immediate(path,clean.length?clean:null);
+}
+function addLine(kind,n,after){var T=cur();if(!T)return;T[kind]=T[kind]||{};var a=(T[kind][K(n)]&&T[kind][K(n)].length)?T[kind][K(n)]:[""];
+ var at=after<0?a.length:after+1;a.splice(at,0,"");T[kind][K(n)]=a;render();
+ var sel='input[data-'+(kind==="m"?"memo":"link")+'="'+n.replace(/["\\]/g,"\\$&")+'"][data-j="'+at+'"]';
+ var el=document.querySelector(sel);if(el)el.focus();
+}
+function delLine(tabId,kind,n,j){var T=S[tabId];var a=((T[kind]&&T[kind][K(n)])||[]).slice();a.splice(j,1);setLines(tabId,kind,n,a,false)}
+
+function submitTab(){
+ var el=document.getElementById("tabname"),name=(el&&el.value||"").trim();
+ if(!name){tabMsg="이름을 입력하세요";render();return}
+ var ids=tabList();
+ var dup=ids.some(function(id){return S[id].name===name&&!(tabForm==="rename"&&id===ui.t)});
+ if(dup){tabMsg="같은 이름의 탭이 이미 있습니다";render();return}
+ if(tabForm==="new"){
+  var id="t"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  var maxOrder=-1;ids.forEach(function(x){if((S[x].order||0)>maxOrder)maxOrder=S[x].order||0});
+  immediate("tabs/"+id+"/name",name);
+  immediate("tabs/"+id+"/order",maxOrder+1);
+  ui.t=id;saveUi();
+ }else{
+  immediate("tabs/"+ui.t+"/name",name);
+ }
+ tabForm=null;tabMsg="";render();
+}
+function deleteTab(tabId){db.ref("tabs/"+tabId).remove().catch(function(e){console.error(e)})}
+function resetTab(tabId){db.ref("tabs/"+tabId).update({s:null,m:null,p:null,l:null}).catch(function(e){console.error(e)})}
+
+/* ---------- Rendering ---------- */
+function row(tabId,T,n,grp){var s=(T.s&&T.s[K(n)])||"";
+ var P=T.p&&T.p[K(n)], on=!!(P&&P.on), pc=on?(P.c||[]):[];
+ var h='<li data-s="'+s+'"><span class="nm"><span class="nt">'+esc(n)+'</span><button class="ptog" data-ptog="'+esc(n)+'" aria-pressed="'+on+'" title="공정별로 나눠 체크">공정별</button>'+(grp?'<small>'+esc(grp)+'</small>':'')+'</span><span class="st">';
+ ["done","fix","na"].forEach(function(v){
+  h+='<button data-item="'+esc(n)+'" data-v="'+v+'" aria-pressed="'+(s===v)+'">'+LBL[v]+(v==="done"&&on&&s!=="done"?' <span class="pn">'+pc.length+'/'+PROCS.length+'</span>':'')+'</button>';
+  if(v==="done"&&on){h+='<span class="proc" role="group" aria-label="공정별 체크">';PROCS.forEach(function(p){h+='<button data-pitem="'+esc(n)+'" data-proc="'+esc(p)+'" aria-pressed="'+(pc.indexOf(p)>=0)+'">'+esc(p)+'</button>'});h+='</span>'}
+ });
+ h+='</span><span class="memos">';
+ var lines=(T.m&&T.m[K(n)]&&T.m[K(n)].length)?T.m[K(n)]:[""];
+ var idBase=K(n);
+ lines.forEach(function(v,j){var lid="m"+idBase+"-"+j;
+  h+='<span class="memo">'+(j===0?'<label for="'+lid+'">비고</label>':'<span class="sp"></span>')+'<input type="text" id="'+lid+'" data-memo="'+esc(n)+'" data-j="'+j+'" value="'+esc(v)+'" placeholder="'+(j===0?'메모 입력':'추가 메모')+'" maxlength="300" autocomplete="off">'+(lines.length>1||v?'<button class="mdel" data-mdel="'+esc(n)+'" data-j="'+j+'" aria-label="이 줄 삭제" title="이 줄 삭제">×</button>':'')+'</span>'});
+ h+='<button class="madd" data-madd="'+esc(n)+'">+ 줄 추가</button>';
+ var Ls=(T.l&&T.l[K(n)]&&T.l[K(n)].length)?T.l[K(n)]:[""];
+ Ls.forEach(function(L,j){var lid="l"+idBase+"-"+j;
+  h+='<span class="memo link">'+(j===0?'<label for="'+lid+'">링크</label>':'<span class="sp"></span>')+'<input type="text" id="'+lid+'" data-link="'+esc(n)+'" data-j="'+j+'" value="'+esc(L)+'" placeholder="'+(j===0?'폴더 경로 또는 주소 붙여넣기':'추가 링크')+'" maxlength="500" autocomplete="off">'+
+  (L?'<button class="mini" data-lcopy="'+esc(n)+'" data-j="'+j+'">복사</button>':'')+(Ls.length>1||L?'<button class="mdel" data-ldel="'+esc(n)+'" data-j="'+j+'" aria-label="이 링크 삭제" title="이 링크 삭제">×</button>':'')+'</span>'});
+ h+='<button class="madd" data-ladd="'+esc(n)+'">+ 링크 추가</button></span>';
+ return h+'</li>';
+}
+function render(){
+ var T=cur();
+ var root=document.getElementById("root");
+ if(!T){root.innerHTML='<div class="wrap"><p class="sub">불러오는 중…</p></div>';return}
+ var tabId=ui.t;
+ var c=counts(T,ALL), pct=pctOf(T), g=GROUPS[ui.g], gc=counts(T,g.i);
+ var h='<div class="wrap"><div class="head"><div><h1>서류점검항목 · <span class="tn">'+esc(T.name||"탭")+'</span></h1><p class="sub">서류 '+c.t+'개 · 분류 '+GROUPS.length+'개 · 탭 '+tabList().length+'개</p></div>';
+ h+='<div class="save '+(online?"on":"off")+'"><span class="st"><i></i><span>'+(online?"실시간 동기화됨":"연결 끊김 · 재접속 중")+'</span></span><span class="who">'+esc(meEmail)+'</span><button class="signout" id="signout">로그아웃</button></div></div>';
+ h+='<div class="sum">'+meter(c)+'<div class="stats"><span><span class="pct">'+pct+'%</span>정리됨</span><span>완료 <b>'+c.done+'</b></span><span>보완 필요 <b>'+c.fix+'</b></span><span>해당없음 <b>'+c.na+'</b></span><span>미확인 <b>'+c.none+'</b></span></div></div>';
+ h+='<div class="cols"><section class="main" id="main">';
+ h+='<div class="mh"><div class="mh-top"><h2>'+(q?'검색 결과':esc(g.n))+'</h2>'+(q?'':'<span class="cnt">'+(gc.done+gc.na)+' / '+gc.t+' 정리</span>')+'</div>';
+ h+='<div class="tools"><div class="seg" role="group" aria-label="상태 필터">';
+ [["all","전체"],["none","미확인"],["fix","보완"],["done","완료"]].forEach(function(f){h+='<button data-f="'+f[0]+'" aria-pressed="'+(ui.f===f[0])+'">'+f[1]+'</button>'});
+ h+='</div><input type="search" id="q" placeholder="전체 서류·비고에서 검색" value="'+esc(q)+'" aria-label="검색"></div></div>';
+ var rows='', match=function(n){return ui.f==="all"||((T.s&&T.s[K(n)])||"none")===ui.f};
+ if(q){var ql=q.toLowerCase();GROUPS.forEach(function(G){G.i.forEach(function(n){var m=(T.m&&T.m[K(n)])||[];if((n.toLowerCase().indexOf(ql)>=0||m.join(" ").toLowerCase().indexOf(ql)>=0)&&match(n))rows+=row(tabId,T,n,G.n)})})}
+ else g.i.forEach(function(n){if(match(n))rows+=row(tabId,T,n)});
+ h+=rows?'<ul>'+rows+'</ul>':'<div class="empty">'+(q?'"'+esc(q)+'"에 맞는 서류가 없습니다.':'이 분류에 해당 상태의 서류가 없습니다.')+'</div>';
+ if(!q){h+='<div class="mf"><button class="nav" data-go="'+(ui.g-1)+'"'+(ui.g===0?' disabled':'')+'>← '+(ui.g>0?esc(GROUPS[ui.g-1].n):'')+'</button><button class="nav" data-go="'+(ui.g+1)+'"'+(ui.g===GROUPS.length-1?' disabled':'')+'>'+(ui.g<GROUPS.length-1?esc(GROUPS[ui.g+1].n):'')+' →</button></div>'}
+ h+='</section><nav class="side" aria-label="서류 분류"><h3>분류</h3>';
+ GROUPS.forEach(function(G,gi){var k=counts(T,G.i);
+  h+='<button class="cat" data-g="'+gi+'" aria-current="'+(!q&&gi===ui.g)+'"><span class="cn">'+esc(G.n)+'</span><span class="cc">'+(k.fix?'<span class="flag">보완 '+k.fix+'</span>':'')+(k.none===0&&k.fix===0?'<span class="fin">끝</span>':'')+(k.done+k.na)+'/'+k.t+'</span>'+meter(k)+'</button>'});
+ h+='</nav></div><div class="foot"><span>버튼을 다시 누르면 선택이 해제됩니다. 변경 사항은 실시간으로 모두에게 저장됩니다.</span><button class="btn reset'+(armed==="reset"?' arm':'')+'" id="reset">'+(armed==="reset"?'한 번 더 누르면 이 탭 초기화':'이 탭 초기화')+'</button></div></div>';
+ h+='<div class="tabbar"><div class="tabrow" role="tablist" aria-label="점검 탭">';
+ tabList().forEach(function(id){h+='<button class="tab" role="tab" data-tab="'+id+'" aria-current="'+(id===tabId)+'">'+esc(S[id].name||"탭")+'<small>'+pctOf(S[id])+'%</small></button>'});
+ if(tabForm){h+='<span class="tabform"><input type="text" id="tabname" maxlength="30" placeholder="'+(tabForm==="new"?'새 탭 이름 (예: HACCP)':'바꿀 이름')+'" value="'+(tabForm==="rename"?esc(T.name||""):'')+'" aria-label="탭 이름"><button class="btn pri" id="tabok">'+(tabForm==="new"?'만들기':'변경')+'</button><button class="btn" id="tabcancel">취소</button></span>'+(tabMsg?'<span class="tabmsg">'+esc(tabMsg)+'</span>':'')}
+ else h+='<button class="btn tabedit" id="tabnew">+ 탭 추가</button>';
+ h+='<span class="tabact"><button class="btn tabedit" id="tabrename">이름 변경</button>'+(tabList().length>1?'<button class="btn tabedit'+(armed==="del"?' arm':'')+'" id="tabdel">'+(armed==="del"?'한 번 더 누르면 "'+esc(T.name||"")+'" 삭제':'탭 삭제')+'</button>':'')+'</span></div></div>';
+ var ae=document.activeElement, fid=ae&&ae.id, pos=0; try{pos=ae.selectionStart}catch(e){}
+ root.innerHTML=h;
+ if(fid==="q"||fid==="tabname"||/^[ml]i\d+-\d+$/.test(fid||"")){var el=document.getElementById(fid);if(el){el.focus();try{el.setSelectionRange(pos,pos)}catch(e){}}}
+}
+
+/* ---------- Events ---------- */
+function pick(i){ui.g=i;q="";saveUi();render();
+ var m=document.getElementById("main");if(m&&(m.getBoundingClientRect().top<0||window.innerWidth<=760))m.scrollIntoView({block:"start",behavior:"smooth"})}
+function arm(k){armed=k;render();setTimeout(function(){if(armed===k){armed=null;render()}},4000)}
+function copyText(t,b){var lbl=b.textContent,done=function(ok){b.textContent=ok?"복사됨":"실패";setTimeout(function(){b.textContent=lbl},1500)};
+ var fb=function(){try{var ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();var ok=document.execCommand("copy");ta.remove();done(ok)}catch(x){done(false)}};
+ try{navigator.clipboard.writeText(t).then(function(){done(true)},fb)}catch(x){fb()}}
+
+document.addEventListener("click",function(e){
+ var b=e.target.closest("button");if(!b)return;
+ if(b.id==="signout"){auth.signOut();return}
+ var T=cur();if(!T)return;var tabId=ui.t;
+ if(b.dataset.item){var n=b.dataset.item,v=b.dataset.v;setStatus(tabId,n,v);armed=null;return}
+ if(b.dataset.ptog!==undefined){toggleProcOn(tabId,b.dataset.ptog);return}
+ if(b.dataset.pitem!==undefined){toggleProcItem(tabId,b.dataset.pitem,b.dataset.proc);return}
+ if(b.dataset.lcopy!==undefined){var Ls=(T.l&&T.l[K(b.dataset.lcopy)])||[];copyText(Ls[+b.dataset.j]||"",b);return}
+ if(b.dataset.ladd!==undefined){addLine("l",b.dataset.ladd,-1);return}
+ if(b.dataset.ldel!==undefined){delLine(tabId,"l",b.dataset.ldel,+b.dataset.j);return}
+ if(b.dataset.madd!==undefined){addLine("m",b.dataset.madd,-1);return}
+ if(b.dataset.mdel!==undefined){delLine(tabId,"m",b.dataset.mdel,+b.dataset.j);return}
+ if(b.dataset.f){ui.f=b.dataset.f;saveUi();render();return}
+ if(b.dataset.g!==undefined){pick(+b.dataset.g);return}
+ if(b.dataset.go!==undefined){pick(+b.dataset.go);return}
+ if(b.dataset.tab){ui.t=b.dataset.tab;armed=null;saveUi();render();return}
+ if(b.id==="tabnew"||b.id==="tabrename"){tabForm=b.id==="tabnew"?"new":"rename";tabMsg="";armed=null;render();var el=document.getElementById("tabname");if(el){el.focus();el.select()}return}
+ if(b.id==="tabcancel"){tabForm=null;tabMsg="";render();return}
+ if(b.id==="tabok"){submitTab();return}
+ if(b.id==="tabdel"){if(armed!=="del"){arm("del");return}armed=null;deleteTab(tabId);return}
+ if(b.id==="reset"){if(armed!=="reset"){arm("reset");return}armed=null;resetTab(tabId);return}
+});
+document.addEventListener("input",function(e){
+ var d=e.target.dataset;
+ if(e.target.id==="q"){q=e.target.value.trim();render();return}
+ if(d&&d.memo!==undefined){var T=cur();if(!T)return;T.m=T.m||{};var a=(T.m[K(d.memo)]&&T.m[K(d.memo)].length)?T.m[K(d.memo)]:[""];a[+d.j]=e.target.value;T.m[K(d.memo)]=a;
+  var path="tabs/"+ui.t+"/m/"+K(d.memo);var clean=a.filter(function(x){return x.trim()});markDirty(path,clean.length?clean:null);return}
+ if(d&&d.link!==undefined){var T2=cur();if(!T2)return;T2.l=T2.l||{};var a2=(T2.l[K(d.link)]&&T2.l[K(d.link)].length)?T2.l[K(d.link)]:[""];a2[+d.j]=e.target.value;T2.l[K(d.link)]=a2;
+  var path2="tabs/"+ui.t+"/l/"+K(d.link);var clean2=a2.filter(function(x){return x.trim()});markDirty(path2,clean2.length?clean2:null);return}
+});
+document.addEventListener("focusout",function(e){var d=e.target.dataset;if(d&&(d.memo!==undefined||d.link!==undefined))flushDirty()});
+document.addEventListener("keydown",function(e){
+ if(e.target.id==="tabname"){if(e.key==="Enter"){e.preventDefault();submitTab()}else if(e.key==="Escape"){tabForm=null;tabMsg="";render()}return}
+ var d=e.target.dataset;if(!d)return;
+ if(d.memo!==undefined&&e.key==="Enter"&&!e.isComposing){e.preventDefault();flushDirty();addLine("m",d.memo,+d.j)}
+ if(d.link!==undefined&&e.key==="Enter"&&!e.isComposing){e.preventDefault();flushDirty();addLine("l",d.link,+d.j)}
+});
+
+/* ---------- Auth UI ---------- */
+var gate=document.getElementById("gate"), root=document.getElementById("root");
+function showGate(html){root.hidden=true;gate.hidden=false;gate.innerHTML=html}
+function showApp(){gate.hidden=true;root.hidden=false}
+var GICON='<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.3 0 24 0 14.6 0 6.4 5.4 2.5 13.2l7.9 6.1C12.3 13 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7C43.9 37.6 46.5 31.6 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 19.3c-.5 1.5-.8 3.1-.8 4.7s.3 3.2.8 4.7l-7.9 6.1C1 31.5 0 27.9 0 24s1-7.5 2.5-10.8l7.9 6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.6l-7.3-5.7c-2 1.4-4.7 2.2-8.2 2.2-6.4 0-11.7-3.5-13.6-9.9l-7.9 6.1C6.4 42.6 14.6 48 24 48z"/></svg>';
+function loginScreen(){
+ showGate('<div class="card"><h1>서류점검항목</h1><p>허용된 구글 계정으로 로그인해 주세요.</p><button class="gbtn" id="glogin">'+GICON+'<span>Google로 로그인</span></button></div>');
+ document.getElementById("glogin").onclick=function(){
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(err){
+   showGate('<div class="card"><h1>서류점검항목</h1><p class="denied">로그인에 실패했습니다: '+esc(err.message||"")+'</p><button class="gbtn" id="retry">'+GICON+'<span>다시 시도</span></button></div>');
+   document.getElementById("retry").onclick=loginScreen;
+  });
+ };
+}
+function deniedScreen(email){
+ showGate('<div class="card"><h1>서류점검항목</h1><p class="denied">'+esc(email)+' 계정은 접근 권한이 없습니다.</p><p>관리자에게 계정 추가를 요청해 주세요.</p><button class="gbtn" id="switch">'+GICON+'<span>다른 계정으로 로그인</span></button></div>');
+ document.getElementById("switch").onclick=function(){auth.signOut().then(loginScreen)};
+}
+function loadingScreen(){showGate('<div class="card"><div class="spin"></div><p>확인 중…</p></div>')}
+
+var dbListenerOn=false;
+function startListening(){
+ if(dbListenerOn)return;dbListenerOn=true;
+ db.ref(".info/connected").on("value",function(snap){online=!!snap.val();if(S)render()});
+ db.ref("tabs").on("value",function(snap){
+  var val=snap.val()||{};
+  S=val;
+  if(!Object.keys(S).length&&!seeded){
+   seeded=true;
+   var id="t"+Date.now().toString(36);
+   immediate("tabs/"+id+"/name","기본");
+   immediate("tabs/"+id+"/order",0);
+   return;
+  }
+  showApp();render();
+ },function(err){console.error(err)});
+}
+function stopListening(){
+ db.ref("tabs").off();db.ref(".info/connected").off();dbListenerOn=false;S=null;seeded=false;
+}
+
+auth.onAuthStateChanged(function(user){
+ if(!user){stopListening();loginScreen();return}
+ if(ALLOWED_EMAILS.indexOf(user.email)<0){stopListening();deniedScreen(user.email);return}
+ meEmail=user.email;loadingScreen();startListening();
+});
+})();
+</script>
+</body>
+</html>
